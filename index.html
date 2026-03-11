@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Wall Wars</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html, body { overflow:hidden; -webkit-user-select:none; user-select:none; position:fixed; width:100vw; height:100svh; height:100vh; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+        @supports (height: 100svh) { html, body { height: 100svh; } }
+        body { background: linear-gradient(180deg, #87CEEB 0%, #B0E0FF 50%, #E0F4FF 100%); }
+
+        /* Clouds decoration */
+        .cloud { position:absolute; background:#fff; border-radius:50px; opacity:0.6; z-index:0; pointer-events:none; }
+        .cloud::before, .cloud::after { content:''; position:absolute; background:#fff; border-radius:50%; }
+        .cloud-1 { width:120px; height:40px; top:8%; right:10%; }
+        .cloud-1::before { width:50px; height:50px; top:-25px; left:20px; }
+        .cloud-1::after { width:35px; height:35px; top:-15px; left:55px; }
+        .cloud-2 { width:80px; height:28px; top:15%; left:5%; opacity:0.4; }
+        .cloud-2::before { width:35px; height:35px; top:-18px; left:15px; }
+
+        /* Game container */
+        #gc { position:relative; width:100%; height:100%; z-index:1; padding-top:env(safe-area-inset-top,0); padding-bottom:env(safe-area-inset-bottom,0); }
+        canvas { z-index:1; touch-action:none; }
+
+        /* UI */
+        #ui { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:100; }
+        .screen { display:none; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:16px; padding:20px; padding-top:max(20px, env(safe-area-inset-top)); padding-bottom:max(20px, env(safe-area-inset-bottom)); }
+        .screen:not(.active) { pointer-events:none !important; }
+        .screen.active { display:flex; pointer-events:auto; }
+
+        /* Buttons */
+        .btn { border:none; border-radius:14px; padding:14px 32px; font-size:clamp(0.9rem, 3vw, 1.1rem); font-weight:700; font-family:inherit; cursor:pointer; pointer-events:auto !important; touch-action:manipulation; position:relative; z-index:110; transition: transform 0.1s, box-shadow 0.1s; letter-spacing:0.5px; min-width:200px; min-height:48px; text-align:center; -webkit-tap-highlight-color:rgba(0,0,0,0.1); }
+        .btn:active { transform:scale(0.96); }
+        .btn-green { background:linear-gradient(180deg,#6ECF5C,#4CAF50); color:#fff; box-shadow:0 4px 0 #388E3C, 0 6px 12px rgba(0,0,0,0.15); }
+        .btn-blue { background:linear-gradient(180deg,#5BAFEF,#2196F3); color:#fff; box-shadow:0 4px 0 #1976D2, 0 6px 12px rgba(0,0,0,0.15); }
+        .btn-orange { background:linear-gradient(180deg,#FFB74D,#FF9800); color:#fff; box-shadow:0 4px 0 #F57C00, 0 6px 12px rgba(0,0,0,0.15); }
+        .btn-gray { background:linear-gradient(180deg,#BDBDBD,#9E9E9E); color:#fff; box-shadow:0 4px 0 #757575, 0 6px 12px rgba(0,0,0,0.1); }
+        .btn-small { padding:10px 20px; font-size:clamp(0.8rem, 2.5vw, 0.9rem); min-width:120px; min-height:48px; border-radius:10px; }
+
+        /* Title */
+        .game-title { font-size:clamp(1.8rem, 7vw, 2.6rem); font-weight:900; color:#fff; text-shadow: 0 3px 0 #1976D2, 0 6px 15px rgba(0,0,0,0.2); letter-spacing:4px; }
+        .game-sub { font-size:clamp(0.75rem, 2.5vw, 0.9rem); color:#fff; opacity:0.8; text-shadow:0 1px 3px rgba(0,0,0,0.2); }
+        .game-ver { font-size:clamp(0.6rem, 1.8vw, 0.7rem); color:#fff; opacity:0.5; letter-spacing:2px; }
+
+        /* Menu */
+        #menu { gap:14px; }
+        #menu .btn-group { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+
+        /* Matching */
+        #matching { gap:20px; }
+        #matching .spinner { width:50px; height:50px; border:4px solid rgba(255,255,255,0.3); border-top:4px solid #fff; border-radius:50%; animation:spin 0.8s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        #match-timer { font-size:0.85rem; color:#fff; opacity:0.7; }
+
+        /* Friends */
+        #friends { gap:14px; }
+        #friends input { background:rgba(255,255,255,0.9); border:3px solid #2196F3; color:#333; padding:12px 18px; font-size:1.4rem; text-align:center; width:180px; font-family:inherit; letter-spacing:8px; font-weight:700; border-radius:12px; pointer-events:auto !important; touch-action:manipulation; position:relative; z-index:110; text-transform:uppercase; }
+        #friends input::placeholder { color:#aaa; letter-spacing:3px; font-size:0.9rem; font-weight:400; }
+        #friends .btn-row { display:flex; gap:10px; }
+
+        /* Lobby */
+        #lobby { gap:14px; }
+        .room-badge { background:rgba(255,255,255,0.9); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border-radius:16px; padding:10px 24px; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+        .room-label { font-size:0.7rem; color:#999; text-transform:uppercase; letter-spacing:2px; }
+        .room-code { font-size:clamp(1.8rem, 6vw, 2.4rem); font-weight:900; color:#2196F3; letter-spacing:10px; }
+        .player-slot { background:rgba(255,255,255,0.85); border-radius:12px; padding:12px 20px; display:flex; align-items:center; gap:12px; min-width:220px; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
+        .player-slot .avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.2rem; color:#fff; font-weight:700; }
+        .player-slot .pname { font-weight:600; color:#333; font-size:0.95rem; }
+        .player-slot .ptag { font-size:0.75rem; color:#999; }
+        .player-slot.empty { opacity:0.4; }
+
+        /* Countdown */
+        #countdown { gap:0; }
+        .count-num { font-size:clamp(4rem, 15vw, 6rem); font-weight:900; color:#fff; text-shadow:0 4px 0 #F57C00, 0 8px 20px rgba(0,0,0,0.2); animation:pulse 1s infinite; }
+        @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.1);} }
+
+        /* HUD - matches reference image 2 layout */
+        #hud { display:none; padding:0; pointer-events:none; }
+        #hud.active { display:block; }
+        .hud-top { position:absolute; top:env(safe-area-inset-top,12px); left:12px; right:12px; display:flex; justify-content:space-between; align-items:center; z-index:101; }
+        .hud-timer { background:rgba(0,0,0,0.75); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:#fff; padding:6px 14px; border-radius:10px; font-size:clamp(0.9rem, 3vw, 1.1rem); font-weight:700; font-variant-numeric:tabular-nums; }
+        .hud-opponent { display:flex; align-items:center; gap:8px; }
+        .hud-opponent .opp-avatar { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:0.85rem; }
+        .hud-opponent .opp-info { font-size:0.75rem; color:rgba(0,0,0,0.6); font-weight:600; }
+        .hud-bottom { position:absolute; bottom:max(env(safe-area-inset-bottom,12px),12px); left:12px; right:12px; display:flex; align-items:center; gap:10px; z-index:101; }
+        .hud-me { display:flex; align-items:center; gap:8px; flex:1; }
+        .hud-me .my-avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; flex-shrink:0; }
+        .hud-me .my-info { flex:1; }
+        .hud-me .my-name { font-size:0.75rem; color:rgba(0,0,0,0.6); font-weight:600; }
+        .ink-bar { width:100%; height:8px; background:rgba(0,0,0,0.15); border-radius:4px; overflow:hidden; margin-top:3px; }
+        .ink-fill { height:100%; border-radius:4px; transition:width 0.1s; }
+
+        /* Game Over */
+        #gameover { gap:14px; }
+        #gameover .result-card { background:rgba(255,255,255,0.9); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border-radius:20px; padding:24px 32px; text-align:center; box-shadow:0 4px 16px rgba(0,0,0,0.1); }
+        #gameover .result-title { font-size:clamp(1.5rem, 5vw, 2rem); font-weight:900; }
+        #gameover .result-scores { margin-top:12px; }
+        #gameover .score-row { display:flex; align-items:center; gap:10px; padding:6px 0; font-size:1rem; }
+        #gameover .score-row .s-avatar { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:0.8rem; }
+        #gameover .score-row .s-name { font-weight:600; flex:1; color:#333; }
+        #gameover .score-row .s-pct { font-weight:700; color:#555; }
+        #gameover .btn-group { display:flex; gap:10px; margin-top:4px; }
+
+        /* Connection status */
+        #conn-status { position:absolute; top:4px; left:50%; transform:translateX(-50%); font-size:0.65rem; color:rgba(0,0,0,0.4); z-index:200; }
+        #conn-status.error { color:#D32F2F; font-weight:600; }
+        #conn-status.connected { color:#388E3C; }
+    </style>
+</head>
+<body>
+    <div class="cloud cloud-1"></div>
+    <div class="cloud cloud-2"></div>
+
+<div id="gc">
+    <div id="ui">
+        <!-- Main Menu -->
+        <div id="menu" class="screen active">
+            <div class="game-title">WALL WARS</div>
+            <div class="game-sub">Draw walls &middot; Claim territory &middot; 1v1</div>
+            <div class="game-ver">v1.3.0</div>
+            <div class="btn-group">
+                <button class="btn btn-green" id="btn-quick">Quick Play</button>
+                <button class="btn btn-blue" id="btn-solo">Solo Play</button>
+                <button class="btn btn-orange" id="btn-friends">Play with Friends</button>
+            </div>
+        </div>
+
+        <!-- Matching -->
+        <div id="matching" class="screen">
+            <div class="spinner"></div>
+            <div style="color:#fff; font-size:1.2rem; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,0.2);">Finding opponent...</div>
+            <div id="match-timer">0s</div>
+            <button class="btn btn-gray btn-small" id="btn-cancel-match">Cancel</button>
+        </div>
+
+        <!-- Friends -->
+        <div id="friends" class="screen">
+            <div style="color:#fff; font-size:1.1rem; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,0.2);">Play with Friends</div>
+            <input id="room-code-input" type="text" maxlength="4" placeholder="CODE" autocomplete="off" inputmode="text">
+            <div class="btn-row">
+                <button class="btn btn-blue btn-small" id="btn-join">Join Room</button>
+                <button class="btn btn-orange btn-small" id="btn-create">Create Room</button>
+            </div>
+            <button class="btn btn-gray btn-small" id="btn-friends-back">Back</button>
+        </div>
+
+        <!-- Lobby -->
+        <div id="lobby" class="screen">
+            <div class="room-badge">
+                <div class="room-label">Room Code</div>
+                <div class="room-code" id="lobby-code">----</div>
+            </div>
+            <div id="player-slots"></div>
+            <div id="lobby-status" style="color:#fff; font-size:0.85rem; opacity:0.8;">Waiting for opponent...</div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-green btn-small" id="start-btn" style="display:none">Start Game</button>
+                <button class="btn btn-gray btn-small" id="btn-leave">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Countdown -->
+        <div id="countdown" class="screen">
+            <div class="count-num" id="count-num">3</div>
+        </div>
+
+        <!-- HUD (game layout per reference image 2) -->
+        <div id="hud" class="screen">
+            <div class="hud-top">
+                <div class="hud-timer" id="hud-timer">01:00</div>
+                <div class="hud-opponent" id="hud-opponent">
+                    <div class="opp-info" id="opp-name">Opponent</div>
+                    <div class="opp-avatar" id="opp-avatar" style="background:#FF9800;">B</div>
+                </div>
+            </div>
+            <div class="hud-bottom">
+                <div class="hud-me">
+                    <div class="my-avatar" id="my-avatar" style="background:#2196F3;">Y</div>
+                    <div class="my-info">
+                        <div class="my-name" id="my-name">You</div>
+                        <div class="ink-bar"><div class="ink-fill" id="ink-fill" style="width:100%; background:#4CAF50;"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over -->
+        <div id="gameover" class="screen">
+            <div class="result-card">
+                <div class="result-title" id="result-title">VICTORY!</div>
+                <div class="result-scores" id="result-scores"></div>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-green btn-small" id="retry-btn">Play Again</button>
+                <button class="btn btn-gray btn-small" id="btn-menu">Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="conn-status"></div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ═══════════════════════════════════════════════════════════
+// STEP 10.0 — Analytics IIFE
+// ═══════════════════════════════════════════════════════════
+const Analytics = (() => {
+    const ENDPOINT = 'https://script.google.com/macros/s/AKfycbx5s20juL7xT-8G7gJfSfXwGJSh7-UULfINI5AliWWMvyRmbrogGjfMxoKOSws74Y36/exec';
+    const GAME_ID = 'prototype008-wallwars';
+    const VERSION = '1.3';
+    let uid = localStorage.getItem('_ana_uid');
+    const isReturning = !!uid;
+    if (!uid) { uid = crypto.randomUUID(); localStorage.setItem('_ana_uid', uid); }
+    let visitCount = parseInt(localStorage.getItem('_ana_visits') || '0') + 1;
+    localStorage.setItem('_ana_visits', visitCount);
+    let firstVisit = localStorage.getItem('_ana_first');
+    if (!firstVisit) { firstVisit = new Date().toISOString().slice(0, 10); localStorage.setItem('_ana_first', firstVisit); }
+    const daysSinceFirst = Math.floor((Date.now() - new Date(firstVisit).getTime()) / 86400000);
+    const sessionId = crypto.randomUUID().slice(0, 8);
+    const sessionStartTime = Date.now();
+    let gameCount = 0, gameStartTime = 0, totalPlayTime = 0;
+    function send(eventName, data = {}) {
+        const payload = { uid, sessionId, gameId: GAME_ID, v: VERSION, event: eventName, ts: new Date().toISOString(), sessionSec: Math.round((Date.now() - sessionStartTime) / 1000), ...data };
+        try { navigator.sendBeacon(ENDPOINT, JSON.stringify(payload)); } catch (e) {}
+    }
+    return {
+        sessionStart() { send('session_start', { referrer: document.referrer || 'direct', screen: `${screen.width}x${screen.height}`, touch: 'ontouchstart' in window, lang: navigator.language, returning: isReturning, visitNum: visitCount, firstVisit, daysSinceFirst }); },
+        gameStart() { gameCount++; gameStartTime = Date.now(); send('game_start', { gameNum: gameCount }); },
+        gameOver(data = {}) { const playTimeSec = Math.round((Date.now() - gameStartTime) / 1000); totalPlayTime += playTimeSec; send('game_over', { gameNum: gameCount, playTimeSec, totalPlayTimeSec: totalPlayTime, ...data }); },
+        retry() { send('retry', { gameNum: gameCount, totalPlayTimeSec: totalPlayTime }); },
+        event(name, data = {}) { send(name, data); }
+    };
+})();
+
+// ═══════════════════════════════════════════════════════════
+// STEP 10.0 — Ads IIFE
+// ═══════════════════════════════════════════════════════════
+const Ads = (() => {
+    const ADSENSE_ID = '';
+    const ENABLED = ADSENSE_ID && !location.hostname.includes('github.io');
+    let adBreakFn = (o) => { if (o.adBreakDone) o.adBreakDone({ breakStatus: 'notReady' }); else if (o.afterAd) o.afterAd(); };
+    let adConfigFn = (o) => {};
+    if (ENABLED) {
+        const s = document.createElement('script'); s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_ID}`; s.crossOrigin = 'anonymous'; s.async = true; document.head.appendChild(s);
+        window.adsbygoogle = window.adsbygoogle || []; adBreakFn = adConfigFn = function(o) { adsbygoogle.push(o); };
+    }
+    return {
+        config: () => adConfigFn({ preloadAdBreaks: 'on', sound: 'on' }),
+        showInterstitial: (onComplete) => adBreakFn({ type: 'next', name: 'between-games', beforeAd: () => {}, afterAd: () => {}, adBreakDone: (info) => { if (onComplete) onComplete(); } }),
+        isEnabled: () => ENABLED,
+    };
+})();
+
+// ═══════════════════════════════════════════════════════════
+// STEP 10.0 — CTA IIFE
+// ═══════════════════════════════════════════════════════════
+const CTA = (() => {
+    const LINKS = { email: '', discord: '', twitter: '' };
+    const SHOW_AFTER_GAMES = 3;
+    let gameCount = 0, ctaDismissed = false;
+    function createCTABanner() {
+        const activeLinks = Object.entries(LINKS).filter(([k, v]) => v);
+        if (!activeLinks.length || ctaDismissed) return null;
+        const banner = document.createElement('div'); banner.id = 'cta-banner';
+        banner.style.cssText = 'position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;z-index:200;display:flex;gap:8px;align-items:center;';
+        banner.innerHTML = '<span>More games soon</span>' + activeLinks.map(([type, url]) => { const labels = { email:'Subscribe', discord:'Join Discord', twitter:'Follow' }; return `<a href="${url}" target="_blank" rel="noopener" style="background:#4f46e5;color:#fff;padding:4px 10px;border-radius:6px;text-decoration:none;font-size:12px" onclick="CTA.track('${type}')">${labels[type]}</a>`; }).join('') + '<span style="cursor:pointer;margin-left:4px;opacity:0.6" onclick="CTA.dismiss()">✕</span>';
+        return banner;
+    }
+    return {
+        onGameOver: (container) => { gameCount++; if (gameCount < SHOW_AFTER_GAMES || ctaDismissed) return; const existing = document.getElementById('cta-banner'); if (existing) existing.remove(); const banner = createCTABanner(); if (banner) container.appendChild(banner); },
+        dismiss: () => { ctaDismissed = true; const el = document.getElementById('cta-banner'); if (el) el.remove(); },
+        track: (type) => { if (typeof Analytics !== 'undefined' && Analytics.event) Analytics.event('cta_click', { type }); },
+    };
+})();
+window.CTA = CTA;
+
+Analytics.sessionStart();
+Ads.config();
+
+// ─── CONFIG ───────────────────────────────────────────────
+const CONFIG = {
+    serverUrl: 'https://prototype-multiplayer.ariescar0326.workers.dev',
+    bgColor: 0x87CEEB,
+    neutralColor: 0xE8E0D0,
+    gridLineColor: 0xCCC4B4,
+    gridSize: 10,
+    cellSize: 1.0,
+    maxInk: 50,
+    inkPerWall: 5,
+    inkRegen: 4,
+    gameTime: 60,
+    aiSpeed: 0.8,
+    aiWallInterval: 1.2,
+    quickPlayAutoStart: 15,  // seconds before auto-starting with AI
+};
+
+// 2 players: blue (#2196F3) and orange (#FF9800) — matches cute style
+const P_COLORS_HEX = [0x2196F3, 0xFF9800];
+const P_COLORS_CSS = ['#2196F3', '#FF9800'];
+const P_COLORS_LIGHT = [0x90CAF9, 0xFFCC80]; // lighter for territory fill
+const P_LABELS = ['You', 'Opponent'];
+
+// ─── State ────────────────────────────────────────────────
+const GS = { MENU:'menu', MATCHING:'matching', FRIENDS:'friends', LOBBY:'lobby', COUNTDOWN:'countdown', PLAYING:'playing', GAMEOVER:'gameover' };
+
+const state = {
+    current: GS.MENU,
+    mode: 'solo',
+    ink: CONFIG.maxInk,
+    timer: CONFIG.gameTime,
+    ws: null,
+    myPlayerId: null,
+    myColorIndex: 0,
+    isHost: false,
+    roomCode: '',
+    players: [],
+    scores: {},
+    reconnecting: false,
+    matchTimer: 0,
+    matchInterval: null,
+};
+
+// ─── Three.js Setup ───────────────────────────────────────
+const gc = document.getElementById('gc');
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setSize(gc.clientWidth, gc.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(CONFIG.bgColor, 0);  // transparent so CSS gradient shows through on menu
+renderer.domElement.style.pointerEvents = 'auto';
+renderer.domElement.style.touchAction = 'none';
+gc.insertBefore(renderer.domElement, gc.firstChild);
+
+const scene = new THREE.Scene();
+const gs = CONFIG.gridSize * CONFIG.cellSize;
+let aspect = gc.clientWidth / gc.clientHeight;
+const camH = gs * 1.4;
+const camera = new THREE.OrthographicCamera(-camH*aspect/2, camH*aspect/2, camH/2, -camH/2, 0.1, 50);
+camera.position.z = 10;
+scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+
+// Board background
+const boardBg = new THREE.Mesh(
+    new THREE.PlaneGeometry(gs + 0.4, gs + 0.4),
+    new THREE.MeshBasicMaterial({ color: 0xD4C8A8 })
+);
+boardBg.position.z = -0.02;
+scene.add(boardBg);
+
+// Grid border
+const borderGeo = new THREE.PlaneGeometry(gs + 0.6, gs + 0.6);
+const borderMat = new THREE.MeshBasicMaterial({ color: 0x8B7D6B });
+const borderMesh = new THREE.Mesh(borderGeo, borderMat);
+borderMesh.position.z = -0.03;
+scene.add(borderMesh);
+
+// ─── Audio ────────────────────────────────────────────────
+const actx = new (window.AudioContext || window.webkitAudioContext)();
+document.addEventListener('touchstart', () => actx.resume(), { once:true });
+document.addEventListener('mousedown', () => actx.resume(), { once:true });
+function tone(f,d=0.08,t='sine',v=0.12) {
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.type=t;o.frequency.value=f;g.gain.setValueAtTime(v,actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+d);
+    o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+d);
+}
+const sfx = {
+    wall: () => tone(600, 0.04, 'sine', 0.08),
+    claim: () => tone(800, 0.06, 'sine', 0.1),
+    win: () => { tone(523,0.12); setTimeout(()=>tone(659,0.12),100); setTimeout(()=>tone(784,0.15),200); },
+    lose: () => tone(200, 0.3, 'sawtooth', 0.15),
+    countdown: () => tone(440, 0.1, 'sine', 0.15),
+    go: () => tone(880, 0.2, 'sine', 0.2),
+};
+function vibrate(p=[10]) { if(navigator.vibrate) navigator.vibrate(p); }
+
+// ─── Grid ─────────────────────────────────────────────────
+const grid = [];
+const cellMeshes = [];
+const cellGeo = new THREE.PlaneGeometry(CONFIG.cellSize * 0.94, CONFIG.cellSize * 0.94);
+const roundedGeo = cellGeo; // keep simple for perf
+
+function initGrid() {
+    cellMeshes.flat().forEach(m => { scene.remove(m); m.material.dispose(); });
+    cellMeshes.length = 0;
+    grid.length = 0;
+    const half = CONFIG.gridSize / 2;
+    for (let y = 0; y < CONFIG.gridSize; y++) {
+        grid[y] = [];
+        cellMeshes[y] = [];
+        for (let x = 0; x < CONFIG.gridSize; x++) {
+            grid[y][x] = 0;
+            const mat = new THREE.MeshBasicMaterial({ color: CONFIG.neutralColor });
+            const mesh = new THREE.Mesh(roundedGeo, mat);
+            mesh.position.set((x-half+0.5)*CONFIG.cellSize, (y-half+0.5)*CONFIG.cellSize, 0);
+            scene.add(mesh);
+            cellMeshes[y][x] = mesh;
+        }
+    }
+}
+
+function applyGridState(serverGrid) {
+    for (let y = 0; y < CONFIG.gridSize; y++) {
+        for (let x = 0; x < CONFIG.gridSize; x++) {
+            const owner = serverGrid[y][x];
+            grid[y][x] = owner;
+            let color = CONFIG.neutralColor;
+            if (owner > 0) color = P_COLORS_LIGHT[owner - 1] !== undefined ? P_COLORS_LIGHT[owner - 1] : 0xffffff;
+            cellMeshes[y][x].material.color.setHex(color);
+        }
+    }
+}
+
+function setCellOwner(x, y, owner) {
+    if (x<0||x>=CONFIG.gridSize||y<0||y>=CONFIG.gridSize) return;
+    grid[y][x] = owner;
+    let color = CONFIG.neutralColor;
+    if (owner > 0) color = P_COLORS_LIGHT[owner - 1] !== undefined ? P_COLORS_LIGHT[owner - 1] : 0xffffff;
+    cellMeshes[y][x].material.color.setHex(color);
+}
+
+// ─── Solo AI ──────────────────────────────────────────────
+let aiTimer = 0, aiX, aiY, aiDirX, aiDirY;
+
+function resetAI() {
+    aiX = CONFIG.gridSize - 2; aiY = CONFIG.gridSize - 2;
+    aiDirX = Math.random() > 0.5 ? 1 : -1;
+    aiDirY = Math.random() > 0.5 ? 1 : -1;
+}
+
+function placeWallLocal(x, y, owner) {
+    if (x<0||x>=CONFIG.gridSize||y<0||y>=CONFIG.gridSize) return false;
+    if (grid[y][x] === owner) return false;
+    setCellOwner(x, y, owner);
+    floodClaimLocal(owner);
+    return true;
+}
+
+function floodClaimLocal(owner) {
+    const sz = CONFIG.gridSize;
+    const visited = Array.from({length:sz}, ()=>new Array(sz).fill(false));
+    const queue = [];
+    for (let y=0;y<sz;y++) for (let x=0;x<sz;x++) {
+        if ((x===0||x===sz-1||y===0||y===sz-1) && grid[y][x]!==owner) {
+            visited[y][x]=true; queue.push([x,y]);
+        }
+    }
+    let head=0;
+    while (head<queue.length) {
+        const [cx,cy]=queue[head++];
+        for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx=cx+dx, ny=cy+dy;
+            if (nx>=0&&nx<sz&&ny>=0&&ny<sz&&!visited[ny][nx]&&grid[ny][nx]!==owner) {
+                visited[ny][nx]=true; queue.push([nx,ny]);
+            }
+        }
+    }
+    for (let y=0;y<sz;y++) for (let x=0;x<sz;x++) {
+        if (!visited[y][x]&&grid[y][x]!==owner) { setCellOwner(x,y,owner); sfx.claim(); }
+    }
+}
+
+function updateSoloAI(dt) {
+    aiTimer += dt;
+    if (aiTimer < CONFIG.aiWallInterval / (1+state.timer/CONFIG.gameTime)) return;
+    aiTimer = 0;
+    placeWallLocal(Math.floor(aiX), Math.floor(aiY), 2);
+    aiX+=aiDirX; aiY+=aiDirY;
+    if (aiX<0||aiX>=CONFIG.gridSize) { aiDirX*=-1; aiX+=aiDirX*2; }
+    if (aiY<0||aiY>=CONFIG.gridSize) { aiDirY*=-1; aiY+=aiDirY*2; }
+    if (Math.random()<0.2) aiDirX = Math.random()>0.5?1:-1;
+    if (Math.random()<0.2) aiDirY = Math.random()>0.5?1:-1;
+}
+
+function countTerritorySolo() {
+    let p=0,e=0; const total=CONFIG.gridSize*CONFIG.gridSize;
+    for (let y=0;y<CONFIG.gridSize;y++) for (let x=0;x<CONFIG.gridSize;x++) {
+        if (grid[y][x]===1) p++; if (grid[y][x]===2) e++;
+    }
+    return { player: Math.round(p/total*100), enemy: Math.round(e/total*100) };
+}
+
+// ─── Input ────────────────────────────────────────────────
+let drawing = false;
+
+function screenToGrid(sx, sy) {
+    const rect = gc.getBoundingClientRect();
+    const nx = ((sx-rect.left)/rect.width)*2-1;
+    const ny = -((sy-rect.top)/rect.height)*2+1;
+    const a = gc.clientWidth / gc.clientHeight;
+    const wx = nx * camH * a / 2;
+    const wy = ny * camH / 2;
+    const half = CONFIG.gridSize / 2;
+    return { x: Math.floor(wx/CONFIG.cellSize+half), y: Math.floor(wy/CONFIG.cellSize+half) };
+}
+
+function handleDraw(sx, sy) {
+    if (state.current !== GS.PLAYING) return;
+    const g = screenToGrid(sx, sy);
+
+    if (state.mode === 'multiplayer') {
+        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+            state.ws.send(JSON.stringify({ type: 'place_wall', payload: { x: g.x, y: g.y } }));
+        }
+        if (g.x>=0&&g.x<CONFIG.gridSize&&g.y>=0&&g.y<CONFIG.gridSize && grid[g.y][g.x] !== state.myColorIndex) {
+            setCellOwner(g.x, g.y, state.myColorIndex);
+            sfx.wall(); vibrate([5]);
+        }
+    } else {
+        if (state.ink < CONFIG.inkPerWall) return;
+        if (placeWallLocal(g.x, g.y, 1)) {
+            state.ink -= CONFIG.inkPerWall;
+            sfx.wall(); vibrate([5]);
+        }
+    }
+}
+
+function getXY(e) {
+    if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    return { x: e.clientX, y: e.clientY };
+}
+
+// Bindto canvas only — not gc — so UI buttons receive touch events
+const cvs = renderer.domElement;
+cvs.addEventListener('touchstart', (e) => { e.preventDefault(); drawing=true; handleDraw(getXY(e).x, getXY(e).y); }, {passive:false});
+cvs.addEventListener('touchmove', (e) => { e.preventDefault(); if(drawing) handleDraw(getXY(e).x, getXY(e).y); }, {passive:false});
+cvs.addEventListener('touchend', (e) => { e.preventDefault(); drawing=false; }, {passive:false});
+cvs.addEventListener('mousedown', (e) => { e.preventDefault(); drawing=true; handleDraw(e.clientX, e.clientY); }, {passive:false});
+cvs.addEventListener('mousemove', (e) => { if(drawing) handleDraw(e.clientX, e.clientY); });
+cvs.addEventListener('mouseup', () => { drawing=false; });
+
+// ─── Screen Management ────────────────────────────────────
+function setScreen(id) {
+    state.current = id;
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+    if (id === 'playing') {
+        document.getElementById('hud').classList.add('active');
+        document.querySelectorAll('.screen').forEach(s => { if(s.id!=='hud') s.classList.remove('active'); });
+    }
+    // Show/hide canvas grid when not playing
+    boardBg.visible = (id === 'playing');
+    borderMesh.visible = (id === 'playing');
+    cellMeshes.flat().forEach(m => m.visible = (id === 'playing'));
+}
+window._setScreen = setScreen;
+
+// ─── Solo Game Flow ───────────────────────────────────────
+let soloStartedOnce = false;
+
+window._startSolo = function() {
+    state.mode = 'solo';
+    state.ink = CONFIG.maxInk;
+    state.timer = CONFIG.gameTime;
+    state.myColorIndex = 1;
+    Analytics.gameStart();
+    Ads.config();
+    soloStartedOnce = true;
+    initGrid();
+    resetAI();
+    setScreen('playing');
+    updateHUDSolo();
+    // Set HUD avatars for solo
+    document.getElementById('my-avatar').style.background = P_COLORS_CSS[0];
+    document.getElementById('my-avatar').textContent = 'Y';
+    document.getElementById('my-name').textContent = 'You';
+    document.getElementById('opp-avatar').style.background = P_COLORS_CSS[1];
+    document.getElementById('opp-avatar').textContent = 'B';
+    document.getElementById('opp-name').textContent = 'Bot';
+    document.getElementById('ink-fill').style.background = P_COLORS_CSS[0];
+};
+
+function updateSoloGame(dt) {
+    state.timer -= dt;
+    if (state.timer <= 0) { endSoloGame(); return; }
+    state.ink = Math.min(CONFIG.maxInk, state.ink + CONFIG.inkRegen * dt);
+    document.getElementById('ink-fill').style.width = (state.ink/CONFIG.maxInk*100)+'%';
+    updateSoloAI(dt);
+    updateHUDSolo();
+}
+
+function updateHUDSolo() {
+    const sec = Math.ceil(state.timer);
+    document.getElementById('hud-timer').textContent = String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0');
+}
+
+function endSoloGame() {
+    const t = countTerritorySolo();
+    const won = t.player > t.enemy;
+    Analytics.gameOver({ mode: 'solo', territoryPct: t.player, win: won, rank: won ? 1 : 2 });
+    Ads.showInterstitial(() => {
+        showGameOver(won, [
+            { name:'You', pct:t.player, color:P_COLORS_CSS[0], isMe:true },
+            { name:'Bot', pct:t.enemy, color:P_COLORS_CSS[1], isMe:false },
+        ]);
+        CTA.onGameOver(document.getElementById('gameover'));
+    });
+}
+
+// ─── Quick Play ───────────────────────────────────────────
+window._quickPlay = async function() {
+    if (!CONFIG.serverUrl) { window._startSolo(); return; }
+    setScreen('matching');
+    state.matchTimer = 0;
+    document.getElementById('match-timer').textContent = '0s';
+    state.matchInterval = setInterval(() => {
+        state.matchTimer++;
+        document.getElementById('match-timer').textContent = state.matchTimer + 's';
+        // Auto-start with AI after timeout
+        if (state.matchTimer >= CONFIG.quickPlayAutoStart && state.isHost && state.ws && state.ws.readyState === WebSocket.OPEN) {
+            state.ws.send(JSON.stringify({ type: 'start_game' }));
+            clearInterval(state.matchInterval);
+        }
+    }, 1000);
+    try {
+        showConnStatus('Creating match...');
+        const res = await fetch(CONFIG.serverUrl + '/api/rooms', { method: 'POST' });
+        const data = await res.json();
+        state.mode = 'multiplayer';
+        connectToRoom(data.roomCode);
+    } catch (e) {
+        clearInterval(state.matchInterval);
+        showConnStatus('Server unavailable, starting solo...', true);
+        setTimeout(() => window._startSolo(), 1500);
+    }
+};
+
+window._cancelMatch = function() {
+    clearInterval(state.matchInterval);
+    if (state.ws) { state.ws.close(); state.ws = null; }
+    state.mode = 'solo';
+    reconnectAttempts = 0;
+    showConnStatus('');
+    setScreen('menu');
+};
+
+// ─── Friends Flow ─────────────────────────────────────────
+window._showFriends = function() {
+    if (!CONFIG.serverUrl) { alert('Server not configured'); return; }
+    setScreen('friends');
+    document.getElementById('room-code-input').value = '';
+};
+
+window._createRoom = async function() {
+    try {
+        showConnStatus('Creating room...');
+        const res = await fetch(CONFIG.serverUrl + '/api/rooms', { method: 'POST' });
+        const data = await res.json();
+        state.mode = 'multiplayer';
+        connectToRoom(data.roomCode);
+    } catch (e) { showConnStatus('Failed to create room', true); }
+};
+
+window._joinRoom = function() {
+    const code = document.getElementById('room-code-input').value.toUpperCase().trim();
+    if (code.length !== 4) return;
+    state.mode = 'multiplayer';
+    connectToRoom(code);
+};
+
+// ─── Lobby ────────────────────────────────────────────────
+window._requestStart = function() {
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.ws.send(JSON.stringify({ type: 'start_game' }));
+    }
+};
+
+window._leaveRoom = function() {
+    clearInterval(state.matchInterval);
+    if (state.ws) { state.ws.close(); state.ws = null; }
+    state.mode = 'solo';
+    state.players = [];
+    reconnectAttempts = 0;
+    showConnStatus('');
+    setScreen('menu');
+};
+
+// ─── Game Over ────────────────────────────────────────────
+function showGameOver(won, players) {
+    const title = document.getElementById('result-title');
+    title.textContent = won ? 'VICTORY!' : 'DEFEATED';
+    title.style.color = won ? '#4CAF50' : '#F44336';
+
+    // Sort by pct descending
+    players.sort((a,b) => b.pct - a.pct);
+    let html = '';
+    for (const p of players) {
+        html += `<div class="score-row">
+            <div class="s-avatar" style="background:${p.color}">${p.name[0]}</div>
+            <div class="s-name">${p.name}${p.isMe?' (You)':''}</div>
+            <div class="s-pct">${p.pct}%</div>
+        </div>`;
+    }
+    document.getElementById('result-scores').innerHTML = html;
+
+    if (won) sfx.win(); else sfx.lose();
+    vibrate(won ? [20] : [60,30,60]);
+    setScreen('gameover');
+}
+
+window._retry = function() {
+    Analytics.retry();
+    if (state.mode === 'multiplayer' && state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.ws.send(JSON.stringify({ type: 'start_game' }));
+    } else {
+        window._startSolo();
+    }
+};
+
+window._backToMenu = function() {
+    if (state.ws) { state.ws.close(); state.ws = null; }
+    clearInterval(state.matchInterval);
+    state.mode = 'solo';
+    state.players = [];
+    reconnectAttempts = 0;
+    showConnStatus('');
+    setScreen('menu');
+};
+
+// ─── Multiplayer: WebSocket ───────────────────────────────
+let reconnectAttempts = 0;
+
+function connectToRoom(roomCode) {
+    if (!CONFIG.serverUrl) { showConnStatus('No server', true); return; }
+    const wsUrl = CONFIG.serverUrl.replace(/^http/, 'ws') + '/api/rooms/' + roomCode + '/ws';
+    const ws = new WebSocket(wsUrl);
+    state.ws = ws;
+    state.roomCode = roomCode;
+    showConnStatus('Connecting...');
+
+    ws.onopen = () => {
+        showConnStatus('Connected', false, true);
+        const name = 'Player-' + Math.random().toString(36).slice(2,5).toUpperCase();
+        ws.send(JSON.stringify({ type: 'join', payload: { playerName: name } }));
+        const hb = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
+            else clearInterval(hb);
+        }, 15000);
+    };
+
+    ws.onmessage = (evt) => {
+        try { handleServerMessage(JSON.parse(evt.data)); } catch {}
+    };
+
+    ws.onclose = () => {
+        showConnStatus('Disconnected', true);
+        if (state.current === GS.PLAYING || state.current === 'lobby') attemptReconnect(roomCode);
+    };
+
+    ws.onerror = () => showConnStatus('Connection error', true);
+}
+
+function attemptReconnect(roomCode) {
+    if (reconnectAttempts >= 5) { showConnStatus('Connection lost', true); return; }
+    state.reconnecting = true;
+    const delay = 1000 * Math.pow(2, reconnectAttempts);
+    reconnectAttempts++;
+    showConnStatus(`Reconnecting (${reconnectAttempts}/5)...`);
+    setTimeout(() => connectToRoom(roomCode), delay);
+}
+
+function handleServerMessage(msg) {
+    switch (msg.type) {
+        case 'joined':
+            reconnectAttempts = 0;
+            state.reconnecting = false;
+            state.myPlayerId = msg.payload.playerId;
+            state.myColorIndex = msg.payload.colorIndex;
+            state.isHost = !!msg.payload.isHost;
+            state.roomCode = msg.payload.roomCode;
+            document.getElementById('lobby-code').textContent = msg.payload.roomCode;
+            // If came from Quick Play, stay on matching screen (not lobby)
+            if (state.current !== GS.MATCHING) setScreen('lobby');
+            break;
+
+        case 'room_update':
+            state.players = msg.payload.players;
+            state.isHost = msg.payload.hostId === state.myPlayerId;
+            updateLobbyUI(msg.payload);
+            break;
+
+        case 'countdown':
+            clearInterval(state.matchInterval);
+            setScreen('countdown');
+            document.getElementById('count-num').textContent = msg.payload.seconds;
+            sfx.countdown();
+            break;
+
+        case 'game_state':
+            if (state.current !== GS.PLAYING) {
+                initGrid();
+                setScreen('playing');
+                sfx.go();
+                setupHUDMultiplayer();
+                Analytics.gameStart();
+                Ads.config();
+            }
+            applyGridState(msg.payload.grid);
+            state.scores = msg.payload.scores;
+            state.timer = msg.payload.timer;
+            if (msg.payload.ink && msg.payload.ink[state.myPlayerId] !== undefined) {
+                state.ink = msg.payload.ink[state.myPlayerId];
+            }
+            updateHUDMultiplayer();
+            break;
+
+        case 'wall_placed':
+            setCellOwner(msg.payload.x, msg.payload.y, msg.payload.colorIndex);
+            if (msg.payload.playerId !== state.myPlayerId) sfx.wall();
+            break;
+
+        case 'game_over':
+            showGameOverMultiplayer(msg.payload.rankings);
+            break;
+
+        case 'error':
+            showConnStatus(msg.payload.message, true);
+            if (msg.payload.code === 'ROOM_NOT_JOINABLE' || msg.payload.code === 'ROOM_FULL') {
+                setTimeout(() => setScreen('menu'), 2000);
+            }
+            break;
+
+        case 'pong': break;
+    }
+}
+
+function setupHUDMultiplayer() {
+    const me = state.players.find(p => p.id === state.myPlayerId);
+    const opp = state.players.find(p => p.id !== state.myPlayerId);
+    if (me) {
+        document.getElementById('my-avatar').style.background = P_COLORS_CSS[me.colorIndex - 1] || P_COLORS_CSS[0];
+        document.getElementById('my-avatar').textContent = (me.name || 'Y')[0].toUpperCase();
+        document.getElementById('my-name').textContent = me.name || 'You';
+        document.getElementById('ink-fill').style.background = P_COLORS_CSS[me.colorIndex - 1] || P_COLORS_CSS[0];
+    }
+    if (opp) {
+        document.getElementById('opp-avatar').style.background = P_COLORS_CSS[opp.colorIndex - 1] || P_COLORS_CSS[1];
+        document.getElementById('opp-avatar').textContent = (opp.name || 'O')[0].toUpperCase();
+        document.getElementById('opp-name').textContent = opp.name + (opp.isAI ? ' (AI)' : '');
+    }
+}
+
+function updateHUDMultiplayer() {
+    const sec = Math.ceil(state.timer);
+    document.getElementById('hud-timer').textContent = String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0');
+    document.getElementById('ink-fill').style.width = (state.ink / CONFIG.maxInk * 100) + '%';
+}
+
+function updateLobbyUI(data) {
+    const container = document.getElementById('player-slots');
+    let html = '';
+    for (const p of data.players) {
+        const c = P_COLORS_CSS[p.colorIndex - 1] || '#999';
+        const suffix = p.isAI ? ' (AI)' : (p.id === state.myPlayerId ? ' (You)' : '');
+        html += `<div class="player-slot">
+            <div class="avatar" style="background:${c}">${p.name[0].toUpperCase()}</div>
+            <div><div class="pname">${p.name}</div><div class="ptag">${suffix}</div></div>
+        </div>`;
+    }
+    for (let i = data.players.length; i < 2; i++) {
+        html += `<div class="player-slot empty">
+            <div class="avatar" style="background:#ccc">?</div>
+            <div><div class="pname">Waiting...</div></div>
+        </div>`;
+    }
+    container.innerHTML = html;
+
+    const startBtn = document.getElementById('start-btn');
+    startBtn.style.display = state.isHost ? '' : 'none';
+
+    document.getElementById('lobby-status').textContent =
+        data.players.length < 2 ? 'Waiting for opponent... (AI will join if no one comes)' : 'Ready! Host can start.';
+}
+
+function showGameOverMultiplayer(rankings) {
+    const myRank = rankings.find(r => r.id === state.myPlayerId);
+    const won = myRank && myRank.rank === 1;
+    Analytics.gameOver({ mode: 'multiplayer', territoryPct: myRank?.territory || 0, win: won, rank: myRank?.rank || 0, playerCount: rankings.length, roomCode: state.roomCode });
+    const players = rankings.map(r => ({
+        name: r.id === state.myPlayerId ? 'You' : r.name,
+        pct: r.territory,
+        color: P_COLORS_CSS[r.colorIndex - 1] || '#999',
+        isMe: r.id === state.myPlayerId,
+    }));
+    Ads.showInterstitial(() => {
+        showGameOver(won, players);
+        CTA.onGameOver(document.getElementById('gameover'));
+    });
+}
+
+function showConnStatus(text, isError = false, isConnected = false) {
+    const el = document.getElementById('conn-status');
+    el.textContent = text;
+    el.className = isError ? 'error' : isConnected ? 'connected' : '';
+}
+
+// ─── Game Loop ────────────────────────────────────────────
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+    const dt = Math.min(clock.getDelta(), 0.1);
+    if (state.current === GS.PLAYING && state.mode === 'solo') updateSoloGame(dt);
+    renderer.render(scene, camera);
+});
+
+// ─── Resize ───────────────────────────────────────────────
+function onResize() {
+    const w=gc.clientWidth, h=gc.clientHeight;
+    aspect = w/h;
+    camera.left=-camH*aspect/2; camera.right=camH*aspect/2;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w,h);
+}
+window.addEventListener('resize', onResize);
+document.addEventListener('visibilitychange', () => { if(document.hidden) actx.suspend(); else actx.resume(); });
+
+// Enter key for room code input
+document.getElementById('room-code-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') window._joinRoom();
+});
+
+// Hide grid on start
+boardBg.visible = false;
+borderMesh.visible = false;
+
+// ─── Button Bindings (addEventListener for mobile reliability) ──
+function bindBtn(id, fn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
+}
+bindBtn('btn-quick', () => window._quickPlay());
+bindBtn('btn-solo', () => window._startSolo());
+bindBtn('btn-friends', () => window._showFriends());
+bindBtn('btn-cancel-match', () => window._cancelMatch());
+bindBtn('btn-join', () => window._joinRoom());
+bindBtn('btn-create', () => window._createRoom());
+bindBtn('btn-friends-back', () => setScreen('menu'));
+bindBtn('start-btn', () => window._requestStart());
+bindBtn('btn-leave', () => window._leaveRoom());
+bindBtn('retry-btn', () => window._retry());
+bindBtn('btn-menu', () => window._backToMenu());
+
+</script>
+</body>
+</html>
